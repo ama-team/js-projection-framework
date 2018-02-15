@@ -1,0 +1,7 @@
+# IDE files
+.idea
+
+# Package management artifacts
+node_modules
+package-lock.json
+yarn.lock
