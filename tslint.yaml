@@ -28,4 +28,5 @@ rules:
     - multiline: never
       arrays: never
       functions: never
+  comment-format: [true, check-space]
 rulesDirectory: []
