@@ -1,0 +1,133 @@
+parameters:
+  jabba:
+    version: &jabba_version 0.9.2
+    cache_key: &jabba_cache_key v1-jabba-0.9.2
+  java:
+    version: &java_version zulu@1.9.0
+  allure:
+    version: &allure_version 2.6.0
+    cache_key: &allure_cache_key v1-allure-2.6.0
+  yarn:
+    cache_key: &yarn_cache_key v1-yarn
+  docker:
+    image:
+      php: &node_docker_image circleci/node:8-browsers
+version: 2
+jobs:
+  build:
+    docker:
+      - image: *node_docker_image
+    working_directory: /tmp/workspace
+    environment:
+      JABBA_VERSION: *jabba_version
+      JAVA_VERSION: *java_version
+      ALLURE_VERSION: *allure_version
+    steps:
+      - checkout
+      - restore_cache:
+          key: *jabba_cache_key
+      - run:
+          name: 'Setup: Install Jabba & Java'
+          command: |
+            set -euxo pipefail
+            sudo ln -sf ~/.jabba/bin/jabba /usr/local/bin/jabba
+            [ ! -d ~/.jabba ] || exit 0
+            curl -sL https://github.com/shyiko/jabba/raw/master/install.sh | bash && . ~/.jabba/jabba.sh
+            jabba install $JAVA_VERSION
+      - save_cache:
+          key: *jabba_cache_key
+          paths:
+            - ~/.jabba
+      - restore_cache:
+          key: *allure_cache_key
+      - run:
+          name: 'Setup: Install Allure'
+          command: |
+            set -euxo pipefail
+            sudo ln -sf ~/allure/bin/allure /usr/local/bin/allure
+            [ ! $(which allure) ] || exit 0
+            curl -L "https://dl.bintray.com/qameta/generic/io/qameta/allure/allure/$ALLURE_VERSION/allure-$ALLURE_VERSION.zip" > /tmp/allure.zip
+            unzip /tmp/allure.zip -d /tmp/allure
+            mkdir -p ~/allure
+            sudo mv /tmp/allure/*/* ~/allure
+      - save_cache:
+          key: *allure_cache_key
+          paths:
+            - ~/allure
+      - run:
+          name: 'Setup: Install Yarn'
+          command: sudo npm i -g yarn
+      - restore_cache:
+          key: *yarn_cache_key
+      - run:
+          name: 'Setup: Yarn Install'
+          command: yarn
+      - save_cache:
+          key: *yarn_cache_key
+          paths:
+            - node_modules
+      - run:
+          name: Lint
+          command: yarn run lint
+          when: always
+      - run:
+          name: Test
+          command: yarn run test
+      - run:
+          name: 'Report: Coverage: Generate'
+          command: 'yarn run test:coverage:report'
+      - run:
+          name: 'Report: Coverage: Publish'
+          command: 'yarn run test:coverage:publish'
+      - run:
+          name: 'Report: Allure: Generate'
+          command: |
+            export JAVA_HOME="$(jabba which $JAVA_VERSION)"
+            allure generate --clean --output build/report/allure -- build/metadata/allure
+      - store_artifacts:
+          path: build/report
+          when: always
+      - store_test_results:
+          path: build/metadata
+          when: always
+  publish:
+    docker:
+      - image: *node_docker_image
+    working_directory: /tmp/workspace
+    steps:
+      - checkout
+      - run:
+          name: 'Setup: Install Yarn'
+          command: sudo npm i -g yarn
+      - restore_cache:
+          key: *yarn_cache_key
+      - run:
+          name: 'Setup: Yarn Install'
+          command: yarn
+      - save_cache:
+          key: *yarn_cache_key
+          paths:
+            - node_modules
+      - run:
+          name: Build
+          command: yarn run build
+      - run:
+          name: NPM Login
+          command: 'echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc'
+      - run:
+          name: Publish
+          command: yarn publish --access public
+workflows:
+  version: 2
+  default:
+    jobs:
+      - build
+      - publish:
+          requires:
+            - build
+          context: npm
+          filters:
+            tags:
+              only: /\d+\.\d+\.\d+/
+            branches:
+              ignore: /.*/
