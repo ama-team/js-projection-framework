@@ -5,4 +5,27 @@ jsRules: {}
 rules:
   max-line-length:
     options: [100]
+  quotemark: [true, single]
+  whitespace:
+    - true
+    - check-branch
+    - check-decl
+    - check-operator
+    - check-separator
+    - check-rest-spread
+    - check-type
+    - check-typecast
+    - check-type-operator
+    - check-preblock
+  no-inferrable-types: false
+  completed-docs: false
+  newline-before-return: false
+  prefer-function-over-method: false
+  object-literal-sort-keys: false
+  member-ordering: false
+  trailing-comma:
+    - true
+    - multiline: never
+      arrays: never
+      functions: never
 rulesDirectory: []
